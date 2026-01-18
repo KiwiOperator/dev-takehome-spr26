@@ -25,7 +25,7 @@ export async function ensureRequestsCollection() {
                         minLength: 2,
                         maxLength: 100,
                     },
-                    createDate: {
+                    createdDate: {
                         bsonType: "date",
                     },
                     lastEditedDate: {
@@ -33,7 +33,7 @@ export async function ensureRequestsCollection() {
                     },
                     status: {
                         bsonType: "string",
-                        enum: ["pending", "completed", "approved", "regected"],
+                        enum: ["pending", "completed", "approved", "rejected"],
                     },
                 },
             },
