@@ -52,3 +52,63 @@ export async function PUT(request: Request) {
         return new ServerResponseBuilder(ResponseType.UNKNOWN_ERROR).build();
     }
 }
+
+export async function GET(request: Request) {
+    const url = new URL(request.url);
+    const status = url.searchParams.get("status");
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+
+    if (Number.isNaN(page) || page < 1) {
+        return new ServerResponseBuilder(ResponseType.INVALID_INPUT).build();
+    }
+
+    try {
+        await ensureRequestsCollection();
+        const db = await getDb();
+        const collection = db.collection("requests");
+
+        const query: Record<string, unknown> = {};
+        if (status) query.status = status;
+
+        const pageSize = PAGINATION_PAGE_SIZE;
+        const skip = (page - 1) * pageSize;
+
+        const [totalCount, docs] = await Promise.all([
+            collection.countDocuments(query),
+            collection
+                .find(query)
+                .sort({ createdDate: -1 })
+                .skip(skip)
+                .limit(pageSize)
+                .toArray(),
+        ]);
+
+        const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+        const items = docs.map((d: any) => ({
+            id: d._id.toString(),
+            requestorName: d.requestorName,
+            itemRequested: d.itemRequested,
+            createdDate: d.createdDate,
+            lastEditedDate: d.lastEditedDate,
+            status: d.status,
+        }));
+
+        const responseBody = {
+            items,
+            pagination: {
+                page,
+                pageSize,
+                totalPages,
+                totalCount,
+            },
+        };
+
+        return new Response(JSON.stringify(responseBody), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+        });
+    } catch {
+        return new ServerResponseBuilder(ResponseType.UNKNOWN_ERROR).build();
+    }
+}
