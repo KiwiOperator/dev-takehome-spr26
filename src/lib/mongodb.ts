@@ -1,7 +1,10 @@
 import { MongoClient, Db } from "mongodb";
 
-const uri = process.env.MONGODB_URI;
-const dbName = process.env.MONGODB_DB;
+const uri = "mongodb+srv://billgao503_db_user:gDl0jWuAW79qVUgg@cc-admin-cluster.hnvhqhc.mongodb.net/?appName=cc-admin-cluster";
+const dbName = "cc_admin_portal";
+
+// const uri = process.env.MONGODB_URI;
+// const dbName = process.env.MONGODB_DB;
 
 if (!uri)  throw new Error("Please define the MONGODB_URI environment variable in .env.local");
 if (!dbName) throw new Error("Please define the MONGODB_DB environment variable in .env.local");
