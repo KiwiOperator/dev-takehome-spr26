@@ -6,8 +6,6 @@ const dbName = process.env.MONGODB_DB;
 if (!uri)  throw new Error("Please define the MONGODB_URI environment variable in .env.local");
 if (!dbName) throw new Error("Please define the MONGODB_DB environment variable in .env.local");
 
-let clientPromise: Promise<MongoClient>;
-
 declare global {
     // eslint-disable-next-line no-var
     var _mongoClientPromise: Promise<MongoClient> | undefined;
@@ -18,7 +16,9 @@ if (!global._mongoClientPromise) {
     global._mongoClientPromise = client.connect();
 }
 
-clientPromise = global._mongoClientPromise;
+const clientPromise: Promise<MongoClient> = 
+    global._mongoClientPromise ??
+    (global._mongoClientPromise = new MongoClient(uri).connect());
 
 export async function getDb(): Promise<Db> {
     const client = await clientPromise;

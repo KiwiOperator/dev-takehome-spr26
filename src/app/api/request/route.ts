@@ -7,8 +7,29 @@ import { InputException, InvalidInputError } from "@/lib/errors/inputExceptions"
 import { ObjectId } from "mongodb";
 
 const ALLOWED_STATUSES = ["pending", "completed", "approved", "rejected"] as const;
+type RequestStatus = (typeof ALLOWED_STATUSES)[number];
 
-function validateCreateBody(body: any) {
+interface RequestDocumentBase {
+    requestorName: string;
+    itemRequested: string;
+    createdDate: Date;
+    lastEditedDate: Date;
+    status: RequestStatus;
+}
+
+type RequestDocument = RequestDocumentBase & { _id: ObjectId };
+
+interface CreateRequestBody {
+    requestorName: string;
+    itemRequested: string;
+}
+
+interface PatchRequestBody {
+    id: string;
+    status: RequestStatus;
+}
+
+function validateCreateBody(body: CreateRequestBody) {
     if (
         !body ||
         typeof body.requestorName !== "string" ||
@@ -22,13 +43,13 @@ function validateCreateBody(body: any) {
     }
 }
 
-function validatePatchBody(body: any) {
+function validatePatchBody(body: PatchRequestBody) {
     if (!body || typeof body.id !== "string" || body.id.trim() === "") {
         throw new InvalidInputError("Invalid id");
     }
     if (
         typeof body.status !== "string" ||
-        !ALLOWED_STATUSES.includes(body.status as (typeof ALLOWED_STATUSES)[number])
+        !ALLOWED_STATUSES.includes(body.status)
     ) {
         throw new InvalidInputError("Invalid status");
     }
@@ -36,25 +57,31 @@ function validatePatchBody(body: any) {
 
 export async function PUT(request: Request) {
     try {
-        const body = await request.json();
+        const body = (await request.json()) as CreateRequestBody;
         validateCreateBody(body);
 
         await ensureRequestsCollection();
         const db = await getDb();
+        const collection = db.collection<RequestDocumentBase>("requests");
 
         const now = new Date();
-        const doc = {
+        const doc: RequestDocumentBase = {
             requestorName: body.requestorName,
             itemRequested: body.itemRequested,
             createdDate: now,
             lastEditedDate: now,
-            status: "pending" as const,
+            status: "pending",
         };
 
-        const result = await db.collection("requests").insertOne(doc);
+        const result = await collection.insertOne(doc);
+
+        const created: RequestDocument = {
+            _id: result.insertedId,
+            ...doc,
+        };
 
         return new Response(
-            JSON.stringify({ _id: result.insertedId, ...doc }),
+            JSON.stringify(created),
             {
                 status: 201,
                 headers: { "Content-Type": "application/json" },
@@ -77,17 +104,17 @@ export async function GET(request: Request) {
         return new ServerResponseBuilder(ResponseType.INVALID_INPUT).build();
     }
 
-    if (status && !ALLOWED_STATUSES.includes(status as (typeof ALLOWED_STATUSES)[number])) {
+    if (status && !ALLOWED_STATUSES.includes(status as RequestStatus)) {
         return new ServerResponseBuilder(ResponseType.INVALID_INPUT).build();
     }
 
     try {
         await ensureRequestsCollection();
         const db = await getDb();
-        const collection = db.collection("requests");
+        const collection = db.collection<RequestDocumentBase>("requests");
 
-        const query: Record<string, unknown> = {};
-        if (status) query.status = status;
+        const query: Partial<Pick<RequestDocumentBase, "status">> = {};
+        if (status) query.status = status as RequestStatus;
 
         const pageSize = PAGINATION_PAGE_SIZE;
         const skip = (page - 1) * pageSize;
@@ -104,7 +131,7 @@ export async function GET(request: Request) {
 
         const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
-        const items = docs.map((d: any) => ({
+        const items = docs.map((d) => ({
             id: d._id.toString(),
             requestorName: d.requestorName,
             itemRequested: d.itemRequested,
@@ -134,7 +161,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
     try {
-        const body = await request.json();
+        const body = (await request.json()) as PatchRequestBody;
         validatePatchBody(body);
 
         if (!ObjectId.isValid(body.id)) {
@@ -143,7 +170,7 @@ export async function PATCH(request: Request) {
 
         await ensureRequestsCollection();
         const db = await getDb();
-        const collection = db.collection("requests");
+        const collection = db.collection<RequestDocumentBase>("requests");
 
         const now = new Date();
 
@@ -153,11 +180,11 @@ export async function PATCH(request: Request) {
             { returnDocument: "after" }
         );
 
-        if (!result || !result.value) {
+        if (!result) {
             throw new InvalidInputError("Request not found");
         }
         
-        const d: any = result.value;
+        const d = result;
         const updated = {
             id: d._id.toString(),
             requestorName: d.requestorName,
